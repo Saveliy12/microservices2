@@ -18,6 +18,7 @@
 # vendor/
 
 HOW_TO_DO/
+how_to_do/
 
 # Go workspace file
 go.work
