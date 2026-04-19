@@ -21,10 +21,7 @@ HOW_TO_DO/
 how_to_do/
 
 # Go workspace file
-go.work
-go.work.sum
-go.mod
-go.sum
+# keep go.work/go.mod/go.sum tracked in this repository
 
 .idea
 .vscode

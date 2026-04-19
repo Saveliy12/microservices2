@@ -9,9 +9,10 @@ vars:
   BUF_VERSION: 'v1.48.0'
   PROTOC_GEN_GO_VERSION: 'v1.35.1'
   PROTOC_GEN_GO_GRPC_VERSION: 'v1.5.1'
+  PROTOC_GEN_OPENAPIV2_VERSION: 'v2.25.1'
   OGEN_VERSION: 'v1.13.0'
-  YQ_VERSION: 'v4.45.2'
-  GRPCURL_VERSION: 'v1.10.0'
+  YQ_VERSION: 'v4.45.2' 
+  GRPCURL_VERSION: 'v1.9.3'
 
   BIN_DIR: '{{.ROOT_DIR}}/bin'
   GOLANGCI_LINT: '{{.BIN_DIR}}/golangci-lint'
@@ -22,6 +23,7 @@ vars:
   YQ: '{{.BIN_DIR}}/yq'
   PROTOC_GEN_GO: '{{.BIN_DIR}}/protoc-gen-go'
   PROTOC_GEN_GO_GRPC: '{{.BIN_DIR}}/protoc-gen-go-grpc'
+  PROTOC_GEN_OPENAPIV2: '{{.BIN_DIR}}/protoc-gen-openapiv2'
   GRPCURL: '{{.BIN_DIR}}/grpcurl'
 
   NODE_MODULES_DIR: '{{.ROOT_DIR}}/node_modules/.bin'
@@ -153,18 +155,22 @@ tasks:
           echo '📦 Installing protoc-gen-go-grpc...'
           GOBIN={{.BIN_DIR}} go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@{{.PROTOC_GEN_GO_GRPC_VERSION}}
         }
+        [ -f {{.PROTOC_GEN_OPENAPIV2}} ] || {
+          echo '📦 Installing protoc-gen-openapiv2...'
+          GOBIN={{.BIN_DIR}} go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@{{.PROTOC_GEN_OPENAPIV2_VERSION}}
+        }
 
   proto:gen:
     deps: [ install-buf, proto:install-plugins, proto:lint ]
     desc: Генерация Go-кода из .proto
-    dir: proto
+    dir: shared/proto
     cmds:
       - '{{.BUF}} generate'
 
   proto:lint:
     deps: [ install-buf, proto:install-plugins ]
     desc: Проверка .proto-файлов на соответствие стилю
-    dir: proto
+    dir: shared/proto
     cmds:
       - '{{.BUF}} lint'
 
@@ -173,7 +179,11 @@ tasks:
     cmds:
       - |
         [ -f {{.REDOCLY}} ] || {
-          npm ci
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci
+          else
+            npm install --no-save @redocly/cli
+          fi
         }
 
   redocly-cli:order-v1-bundle:
@@ -319,9 +329,9 @@ tasks:
         fi
         
         # Извлекаем UUID заказа с учетом разных форматов JSON
-        ORDER_UUID=$(echo $ORDER_RESPONSE | grep -o '"uuid":"[^"]*' | cut -d'"' -f4)
+        ORDER_UUID=$(echo $ORDER_RESPONSE | grep -o '"order_uuid":"[^"]*' | cut -d'"' -f4)
         if [ -z "$ORDER_UUID" ]; then
-          ORDER_UUID=$(echo $ORDER_RESPONSE | grep -o '"uuid": "[^"]*' | cut -d'"' -f4)
+          ORDER_UUID=$(echo $ORDER_RESPONSE | grep -o '"order_uuid": "[^"]*' | cut -d'"' -f4)
           if [ -z "$ORDER_UUID" ]; then
             echo "❌ Не удалось извлечь UUID заказа из ответа."
             echo "🔍 Ответ сервера: $ORDER_RESPONSE"
@@ -401,9 +411,9 @@ tasks:
         fi
         
         # Извлекаем UUID второго заказа с учетом разных форматов JSON
-        ORDER2_UUID=$(echo $ORDER2_RESPONSE | grep -o '"uuid":"[^"]*' | cut -d'"' -f4)
+        ORDER2_UUID=$(echo $ORDER2_RESPONSE | grep -o '"order_uuid":"[^"]*' | cut -d'"' -f4)
         if [ -z "$ORDER2_UUID" ]; then
-          ORDER2_UUID=$(echo $ORDER2_RESPONSE | grep -o '"uuid": "[^"]*' | cut -d'"' -f4)
+          ORDER2_UUID=$(echo $ORDER2_RESPONSE | grep -o '"order_uuid": "[^"]*' | cut -d'"' -f4)
           if [ -z "$ORDER2_UUID" ]; then
             echo "❌ Не удалось извлечь UUID второго заказа из ответа."
             echo "🔍 Ответ сервера: $ORDER2_RESPONSE"
