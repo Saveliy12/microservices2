@@ -1,0 +1,33 @@
+with-expecter: true
+boilerplate-file: ".mockery_boilerplate_text.txt"
+dir: "{{.InterfaceDir}}/mocks"
+filename: "mock_{{.InterfaceNameSnake}}.go"
+outpkg: "mocks"
+mockname: "{{.InterfaceName}}"
+resolve-type-alias: False
+issue-845-fix: True
+
+packages:
+  github.com.Saveliy12/microservices2.git/inventory/internal/service:
+    config:
+      include-regex: ".*Service"
+
+  github.com.Saveliy12/microservices2.git/inventory/internal/repository:
+    config:
+      include-regex: ".*Repository"
+
+  github.com.Saveliy12/microservices2.git/payment/internal/service:
+    config:
+      include-regex: ".*Service"
+
+  github.com.Saveliy12/microservices2.git/payment/internal/repository:
+    config:
+      include-regex: ".*Repository"
+
+  github.com.Saveliy12/microservices2.git/order/internal/service:
+    config:
+      include-regex: ".*Service"
+
+  github.com.Saveliy12/microservices2.git/order/internal/repository:
+    config:
+      include-regex: ".*Repository"

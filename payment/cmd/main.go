@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net"
@@ -9,29 +8,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	paymentV1 "github.com.Saveliy12/microservices2.git/shared/pkg/proto/payment/v1"
-	"github.com/google/uuid"
+	apiv1 "github.com.Saveliy12/microservices2.git/payment/internal/api/payment/v1"
+	paymentservice "github.com.Saveliy12/microservices2.git/payment/internal/service/payment"
+	paymentv1 "github.com.Saveliy12/microservices2.git/shared/pkg/proto/payment/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 const grpcPort = 50052
-
-type PaymentServiceServer struct {
-	paymentV1.UnimplementedPaymentServiceServer
-}
-
-func (p *PaymentServiceServer) PayOrder(_ context.Context, req *paymentV1.PayOrderRequest) (*paymentV1.PayOrderResponse, error) {
-
-	_ = req
-
-	transactionUUID := uuid.NewString()
-	log.Printf("Оплата прошла успешно, transaction_uuid: %s", transactionUUID)
-
-	return &paymentV1.PayOrderResponse{
-		TransactionUuid: transactionUUID,
-	}, nil
-}
 
 func main() {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
@@ -49,9 +33,10 @@ func main() {
 	s := grpc.NewServer()
 
 	// Регистрируем наш сервис
-	service := &PaymentServiceServer{}
+	paymentService := paymentservice.NewService()
+	paymentAPI := apiv1.NewAPI(paymentService)
 
-	paymentV1.RegisterPaymentServiceServer(s, service)
+	paymentv1.RegisterPaymentServiceServer(s, paymentAPI)
 
 	// Включаем рефлексию для отладки
 	reflection.Register(s)
@@ -60,7 +45,7 @@ func main() {
 		log.Printf("🚀 Payment gRPC server listening on %d\n", grpcPort)
 		err = s.Serve(lis)
 		if err != nil {
-			log.Printf("failed to serve: %v\n", err)
+			log.Printf("failed to serve Payment gRPC server: %v\n", err)
 			return
 		}
 	}()
@@ -71,5 +56,5 @@ func main() {
 	<-quit
 	log.Println("🛑 Shutting down Payment gRPC server...")
 	s.GracefulStop()
-	log.Println("✅ Payment Server stopped")
+	log.Println("✅ Payment gRPC server stopped")
 }
