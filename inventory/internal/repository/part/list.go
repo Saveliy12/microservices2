@@ -70,7 +70,7 @@ func containsCategory(values []repositoryModel.Category, target repositoryModel.
 	return false
 }
 
-func hasAnyTag(filterTags []string, partTags []string) bool {
+func hasAnyTag(filterTags, partTags []string) bool {
 	for _, tag := range partTags {
 		if containsString(filterTags, tag) {
 			return true

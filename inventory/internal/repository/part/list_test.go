@@ -6,7 +6,6 @@ import (
 
 	"github.com.Saveliy12/microservices2.git/inventory/internal/model"
 	repoinventory "github.com.Saveliy12/microservices2.git/inventory/internal/repository/part"
-
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )

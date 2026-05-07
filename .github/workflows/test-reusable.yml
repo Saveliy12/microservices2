@@ -3,6 +3,9 @@ name: Run Unit Tests
 on:
   workflow_call:
     inputs:
+      modules:
+        required: true
+        type: string
       go-version:
         required: true
         type: string
@@ -26,4 +29,6 @@ jobs:
         uses: arduino/setup-task@v2.0.0
 
       - name: 🧪 Run unit tests via Taskfile
+        env:
+          MODULES: ${{ inputs.modules }}
         run: task test

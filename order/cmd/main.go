@@ -17,7 +17,6 @@ import (
 	inventoryv1 "github.com.Saveliy12/microservices2.git/shared/pkg/proto/inventory/v1"
 	paymentv1 "github.com.Saveliy12/microservices2.git/shared/pkg/proto/payment/v1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -66,7 +65,6 @@ type paymentClientAdapter struct {
 }
 
 func (a *paymentClientAdapter) PayOrder(ctx context.Context, orderUUID, userUUID string, paymentMethod model.PaymentMethod) (string, error) {
-
 	pmEnum, err := paymentMethodToProto(paymentMethod)
 	if err != nil {
 		return "", err
@@ -107,15 +105,29 @@ func main() {
 
 	inventoryConn, err := connectGRPC(ctx, "localhost:50051")
 	if err != nil {
+		stop()
 		log.Fatalf("failed to connect to inventory: %v", err)
 	}
-	defer inventoryConn.Close()
 
 	paymentConn, err := connectGRPC(ctx, "localhost:50052")
 	if err != nil {
+		// ensure we stop the signal context to release resources
+		_ = inventoryConn.Close()
+		stop()
 		log.Fatalf("failed to connect to payment: %v", err)
 	}
-	defer paymentConn.Close()
+
+	defer func() {
+		if err := inventoryConn.Close(); err != nil {
+			log.Printf("failed to close inventory connection: %v", err)
+		}
+	}()
+
+	defer func() {
+		if err := paymentConn.Close(); err != nil {
+			log.Printf("failed to close payment connection: %v", err)
+		}
+	}()
 
 	orderRepository := repositoryorder.NewRepository()
 
@@ -133,12 +145,31 @@ func main() {
 
 	mux := http.NewServeMux()
 	fileServer := http.FileServer(http.Dir(swaggerStaticDir))
-	mux.HandleFunc("POST /api/v1/orders", api.CreateOrder)
-	mux.HandleFunc("GET /api/v1/orders/", api.GetOrder)
-	mux.HandleFunc("POST /api/v1/orders/", api.OrderAction)
-	mux.HandleFunc("GET /swagger.json", serveSwaggerJSON)
+
+	// Register create endpoint for exact path
+	mux.HandleFunc("/api/v1/orders", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			api.CreateOrder(w, r)
+			return
+		}
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// Register prefix for operations on specific order resources
+	mux.HandleFunc("/api/v1/orders/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			api.GetOrder(w, r)
+		case http.MethodPost:
+			api.OrderAction(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/swagger.json", serveSwaggerJSON)
 	mux.Handle("/swagger-ui.html", fileServer)
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/swagger-ui.html", http.StatusMovedPermanently)
 	})
 
@@ -169,20 +200,10 @@ func main() {
 }
 
 func connectGRPC(ctx context.Context, address string) (*grpc.ClientConn, error) {
-	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// DialContext with WithBlock will wait until the connection is ready or context is done
+	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		return nil, err
-	}
-
-	conn.Connect()
-	for state := conn.GetState(); state != connectivity.Ready; state = conn.GetState() {
-		if !conn.WaitForStateChange(ctx, state) {
-			_ = conn.Close()
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			return nil, context.DeadlineExceeded
-		}
 	}
 
 	return conn, nil

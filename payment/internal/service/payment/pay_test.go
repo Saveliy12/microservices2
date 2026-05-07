@@ -5,10 +5,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
-
 	"github.com.Saveliy12/microservices2.git/payment/internal/model"
 	paymentservice "github.com.Saveliy12/microservices2.git/payment/internal/service/payment"
+	"github.com/stretchr/testify/suite"
 )
 
 type PayOrderServiceTestSuite struct {

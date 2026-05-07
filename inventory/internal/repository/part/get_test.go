@@ -19,6 +19,7 @@ type PartRepositorySuite struct {
 func (s *PartRepositorySuite) SetupTest() {
 	s.repo = repoinventory.NewRepository()
 }
+
 func (s *PartRepositorySuite) TestGetPart_Success() {
 	s.T().Parallel()
 
