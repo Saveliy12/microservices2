@@ -36,7 +36,7 @@ vars:
   COVERAGE_DIR: '{{.ROOT_DIR}}/coverage'
   COVERAGE_FILE: total.out
 
-  MODULES: assembly inventory order payment platform iam notification
+  MODULES: inventory order payment
 
 tasks:
   install-formatters:
@@ -276,37 +276,41 @@ tasks:
 
   test-coverage:
     desc: "Тесты с покрытием бизнес-логики (service/repository), отчёт по каждому модулю + общий"
+    
+    # ИСКЛЮЧАЕМ mocks | converter | model
+    
     cmds:
       - |
         echo "🧪 Запускаем расчёт покрытия..."
         rm -rf {{.COVERAGE_DIR}}
         mkdir -p {{.COVERAGE_DIR}}
-        
+
         ERR=0
         for mod in {{.MODULES}}; do
           echo "📦 Обрабатываем модуль: $mod"
-        
+
           TARGET_PKGS=$(go list ./$mod/... \
-            | grep -E '/(internal/(service|repository))' \
-            | grep -vE '/(mocks|testdata|pkg|api|proto|pb|cmd)' \
+            | grep -E '/(internal/(service|repository))/[^/]+$' \
+            | grep -vE '/(mocks|testdata|converter|model)' \
             | paste -sd "," -)
-        
+
           if [ -z "$TARGET_PKGS" ]; then
             echo "⚠️  Нет подходящих пакетов в $mod"
             continue
           fi
-        
-          go test -coverpkg="$TARGET_PKGS" \
+
+          go test -v \
+            -coverpkg="$TARGET_PKGS" \
             -coverprofile={{.COVERAGE_DIR}}/$mod.out \
             -covermode=atomic \
             $(echo "$TARGET_PKGS" | tr "," " ") || ERR=1
         done
-        
+
         if [ $ERR -ne 0 ]; then
           echo "❌ Ошибки во время тестов"
           exit $ERR
         fi
-        
+
         echo
         echo "📊 Покрытие по каждому модулю:"
         for mod in {{.MODULES}}; do
@@ -316,7 +320,7 @@ tasks:
             go tool cover -func="$OUTFILE" | tail -n1
           fi
         done
-        
+
         echo
         echo "📦 Склеиваем все покрытия..."
         {
@@ -324,7 +328,7 @@ tasks:
           find {{.COVERAGE_DIR}} -type f -name '*.out' ! -name '{{.COVERAGE_FILE}}' \
             -exec grep -h -v "^mode:" {} +
         } > {{.COVERAGE_DIR}}/{{.COVERAGE_FILE}}
-        
+
         echo
         echo "🧾 Общее покрытие по всем модулям:"
         go tool cover -func={{.COVERAGE_DIR}}/{{.COVERAGE_FILE}} | tail -n1

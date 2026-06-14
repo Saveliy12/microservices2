@@ -10,7 +10,6 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 
-# Skip generated files and vendor/bin
 skip-dirs:
   - vendor
   - bin
