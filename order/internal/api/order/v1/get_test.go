@@ -5,28 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"testing"
 
 	"github.com.Saveliy12/microservices2.git/order/internal/model"
-	serviceMocks "github.com.Saveliy12/microservices2.git/order/internal/service/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
-type GetOrderAPISuite struct {
-	suite.Suite
-	api         *API
-	serviceMock *serviceMocks.OrderService
-}
-
-func (s *GetOrderAPISuite) SetupTest() {
-	s.serviceMock = serviceMocks.NewOrderService(s.T())
-	s.api = NewAPI(s.serviceMock)
-}
-
-func (s *GetOrderAPISuite) TestGetOrder_MethodNotAllowed() {
+func (s *OrderAPISuite) TestGetOrder_MethodNotAllowed() {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/orders/order-1", nil)
 	rr := httptest.NewRecorder()
 
@@ -36,7 +22,7 @@ func (s *GetOrderAPISuite) TestGetOrder_MethodNotAllowed() {
 	assert.JSONEq(s.T(), `{"error":"method not allowed"}`, rr.Body.String())
 }
 
-func (s *GetOrderAPISuite) TestGetOrder_InvalidOrderUUID() {
+func (s *OrderAPISuite) TestGetOrder_InvalidOrderUUID() {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orders/", nil)
 	rr := httptest.NewRecorder()
 
@@ -46,7 +32,7 @@ func (s *GetOrderAPISuite) TestGetOrder_InvalidOrderUUID() {
 	assert.JSONEq(s.T(), `{"error":"invalid order uuid"}`, rr.Body.String())
 }
 
-func (s *GetOrderAPISuite) TestGetOrder_Success() {
+func (s *OrderAPISuite) TestGetOrder_Success() {
 	orderUUID := "order-1"
 	txUUID := "tx-1"
 	method := model.PaymentMethodCard
@@ -80,7 +66,7 @@ func (s *GetOrderAPISuite) TestGetOrder_Success() {
 	assert.Equal(s.T(), string(method), got["payment_method"])
 }
 
-func (s *GetOrderAPISuite) TestGetOrder_NotFound() {
+func (s *OrderAPISuite) TestGetOrder_NotFound() {
 	orderUUID := "missing"
 	s.serviceMock.EXPECT().GetOrder(mock.Anything, orderUUID).Return(model.Order{}, model.ErrOrderNotFound).Once()
 
@@ -93,9 +79,9 @@ func (s *GetOrderAPISuite) TestGetOrder_NotFound() {
 	assert.JSONEq(s.T(), `{"error":"order not found"}`, rr.Body.String())
 }
 
-func (s *GetOrderAPISuite) TestGetOrder_ServiceError() {
+func (s *OrderAPISuite) TestGetOrder_ServiceError() {
 	orderUUID := "order-1"
-	errBoom := errors.New("upstream failed")
+	errBoom := errors.New("unexpected error")
 	s.serviceMock.EXPECT().GetOrder(mock.Anything, orderUUID).Return(model.Order{}, errBoom).Once()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orders/"+orderUUID, nil)
@@ -104,9 +90,5 @@ func (s *GetOrderAPISuite) TestGetOrder_ServiceError() {
 	s.api.GetOrder(rr, req)
 
 	require.Equal(s.T(), http.StatusBadGateway, rr.Code)
-	assert.JSONEq(s.T(), `{"error":"upstream failed"}`, rr.Body.String())
-}
-
-func TestGetOrderAPISuite(t *testing.T) {
-	suite.Run(t, new(GetOrderAPISuite))
+	assert.JSONEq(s.T(), `{"error":"unexpected error"}`, rr.Body.String())
 }

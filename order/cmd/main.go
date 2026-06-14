@@ -23,12 +23,15 @@ import (
 
 const (
 	httpPort          = ":8080"
+	inventoryAddr     = "localhost:50051"
+	paymentAddr       = "localhost:50052"
 	readHeaderTimeout = 5 * time.Second
 	shutdownTimeout   = 10 * time.Second
 	swaggerJSONPath   = "shared/api/bundles/order.openapi.v1.bundle.yaml"
 	swaggerStaticDir  = "shared/api"
 )
 
+// inventoryClientAdapter реализует интерфейс service.InventoryClient для gRPC взаимодействия с микросервисом инвентаря
 type inventoryClientAdapter struct {
 	client inventoryv1.InventoryServiceClient
 }
@@ -59,7 +62,7 @@ func (a *inventoryClientAdapter) ListParts(ctx context.Context, partUUIDs []stri
 	return parts, nil
 }
 
-// Adapter for payment gRPC client
+// paymentClientAdapter реализует интерфейс service.PaymentClient для gRPC взаимодействия с микросервисом платежей
 type paymentClientAdapter struct {
 	client paymentv1.PaymentServiceClient
 }
@@ -84,6 +87,7 @@ func (a *paymentClientAdapter) PayOrder(ctx context.Context, orderUUID, userUUID
 	return resp.GetTransactionUuid(), nil
 }
 
+// paymentMethodToProto преобразует доменный enum PaymentMethod в protobuf enum PaymentMethod
 func paymentMethodToProto(method model.PaymentMethod) (paymentv1.PaymentMethod, error) {
 	switch method {
 	case model.PaymentMethodCard:
@@ -99,63 +103,56 @@ func paymentMethodToProto(method model.PaymentMethod) (paymentv1.PaymentMethod, 
 	}
 }
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	inventoryConn, err := connectGRPC(ctx, "localhost:50051")
+// initializeConnections устанавливает gRPC соединения с микросервисами инвентаря и платежей
+// Если соединение с платежами упадёт, соединение с инвентарём будет закрыто и вернётся ошибка
+func initializeConnections(ctx context.Context) (*grpc.ClientConn, *grpc.ClientConn, error) {
+	invConn, err := connectGRPC(ctx, inventoryAddr)
 	if err != nil {
-		stop()
-		log.Fatalf("failed to connect to inventory: %v", err)
+		return nil, nil, err
 	}
 
-	paymentConn, err := connectGRPC(ctx, "localhost:50052")
+	payConn, err := connectGRPC(ctx, paymentAddr)
 	if err != nil {
-		// ensure we stop the signal context to release resources
-		_ = inventoryConn.Close()
-		stop()
-		log.Fatalf("failed to connect to payment: %v", err)
+		_ = invConn.Close()
+		return nil, nil, err
 	}
 
-	defer func() {
-		if err := inventoryConn.Close(); err != nil {
-			log.Printf("failed to close inventory connection: %v", err)
-		}
-	}()
+	return invConn, payConn, nil
+}
 
-	defer func() {
-		if err := paymentConn.Close(); err != nil {
-			log.Printf("failed to close payment connection: %v", err)
-		}
-	}()
-
-	orderRepository := repositoryorder.NewRepository()
-
-	inventoryClient := &inventoryClientAdapter{
-		client: inventoryv1.NewInventoryServiceClient(inventoryConn),
+// newInventoryAdapter создаёт адаптер для взаимодействия с микросервисом инвентаря
+func newInventoryAdapter(conn *grpc.ClientConn) *inventoryClientAdapter {
+	return &inventoryClientAdapter{
+		client: inventoryv1.NewInventoryServiceClient(conn),
 	}
+}
 
-	paymentClient := &paymentClientAdapter{
-		client: paymentv1.NewPaymentServiceClient(paymentConn),
+// newPaymentAdapter создаёт адаптер для взаимодействия с микросервисом платежей
+func newPaymentAdapter(conn *grpc.ClientConn) *paymentClientAdapter {
+	return &paymentClientAdapter{
+		client: paymentv1.NewPaymentServiceClient(conn),
 	}
+}
 
-	orderService := serviceorder.NewService(orderRepository, inventoryClient, paymentClient)
+// buildServiceStack собирает слои чистой архитектуры: репозиторий -> сервис -> API
+func buildServiceStack(invAdapter *inventoryClientAdapter, payAdapter *paymentClientAdapter) *apiv1.API {
+	repo := repositoryorder.NewRepository()
+	service := serviceorder.NewService(repo, invAdapter, payAdapter)
+	return apiv1.NewAPI(service)
+}
 
-	api := apiv1.NewAPI(orderService)
-
-	mux := http.NewServeMux()
+// registerRoutes регистрирует все HTTP обработчики для API эндпоинтов заказов
+func registerRoutes(mux *http.ServeMux, api *apiv1.API) {
 	fileServer := http.FileServer(http.Dir(swaggerStaticDir))
 
-	// Register create endpoint for exact path
 	mux.HandleFunc("/api/v1/orders", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			api.CreateOrder(w, r)
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		api.CreateOrder(w, r)
 	})
 
-	// Register prefix for operations on specific order resources
 	mux.HandleFunc("/api/v1/orders/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -172,7 +169,37 @@ func main() {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/swagger-ui.html", http.StatusMovedPermanently)
 	})
+}
 
+// deferCloseConn безопасно закрывает gRPC соединение и логирует любые ошибки.
+func deferCloseConn(conn *grpc.ClientConn, name string) {
+	if err := conn.Close(); err != nil {
+		log.Printf("failed to close %s connection: %v", name, err)
+	}
+}
+
+func main() {
+	// Настройка graceful shutdown с обработкой сигналов.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Инициализация соединений с микросервисами.
+	invConn, payConn, err := initializeConnections(ctx)
+	if err != nil {
+		stop()
+		log.Fatalf("failed to initialize connections: %v", err)
+	}
+	defer deferCloseConn(invConn, "inventory")
+	defer deferCloseConn(payConn, "payment")
+
+	// Построение стека чистой архитектуры с адаптерами.
+	api := buildServiceStack(newInventoryAdapter(invConn), newPaymentAdapter(payConn))
+
+	// Регистрация HTTP маршрутов и обработчиков.
+	mux := http.NewServeMux()
+	registerRoutes(mux, api)
+
+	// Конфигурация и запуск HTTP сервера.
 	server := &http.Server{
 		Addr:              httpPort,
 		Handler:           mux,
@@ -186,9 +213,11 @@ func main() {
 		}
 	}()
 
+	// Ожидание сигнала завершения.
 	<-ctx.Done()
 	log.Println("🛑 Shutting down Order HTTP server...")
 
+	// Graceful shutdown с таймаутом.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
@@ -199,8 +228,8 @@ func main() {
 	log.Println("✅ Order server stopped")
 }
 
+// connectGRPC устанавливает gRPC соединение с блокировкой до готовности
 func connectGRPC(ctx context.Context, address string) (*grpc.ClientConn, error) {
-	// DialContext with WithBlock will wait until the connection is ready or context is done
 	conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		return nil, err
@@ -209,6 +238,7 @@ func connectGRPC(ctx context.Context, address string) (*grpc.ClientConn, error) 
 	return conn, nil
 }
 
+// serveSwaggerJSON отдаёт OpenAPI спецификацию в формате JSON.
 func serveSwaggerJSON(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

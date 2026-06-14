@@ -1,61 +1,27 @@
 package order_test
 
 import (
-	"context"
-	"errors"
-	"testing"
-
 	"github.com.Saveliy12/microservices2.git/order/internal/model"
-	repoMocks "github.com.Saveliy12/microservices2.git/order/internal/repository/mocks"
-	serviceorder "github.com.Saveliy12/microservices2.git/order/internal/service/order"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
-type mockInventoryClient struct {
-	parts []model.PartQuote
-	err   error
-}
-
-func (m *mockInventoryClient) ListParts(ctx context.Context, partUUIDs []string) ([]model.PartQuote, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	return m.parts, nil
-}
-
-type mockPaymentClient struct{}
-
-func (m *mockPaymentClient) PayOrder(ctx context.Context, orderUUID, userUUID string, paymentMethod model.PaymentMethod) (string, error) {
-	return "", nil
-}
-
-type OrderCreateServiceSuite struct {
-	suite.Suite
-	service  *serviceorder.Service
-	repoMock *repoMocks.OrderRepository
-}
-
-func (s *OrderCreateServiceSuite) SetupTest() {
-	s.repoMock = repoMocks.NewOrderRepository(s.T())
-}
-
-func (s *OrderCreateServiceSuite) TestCreateOrder_Success() {
-	invMock := &mockInventoryClient{
-		parts: []model.PartQuote{
-			{UUID: "part-1", Price: 100},
-			{UUID: "part-2", Price: 50},
-		},
-	}
-	s.service = serviceorder.NewService(s.repoMock, invMock, &mockPaymentClient{})
-
+func (s *OrderServiceSuite) TestCreateOrder_Success() {
 	userUUID := "user-1"
 	partUUIDs := []string{"part-1", "part-2"}
+	parts := []model.PartQuote{
+		{UUID: "part-1", Price: 100},
+		{UUID: "part-2", Price: 50},
+	}
+
+	s.inventoryMock.EXPECT().
+		ListParts(s.ctx, partUUIDs).
+		Return(parts, nil).
+		Once()
 
 	s.repoMock.EXPECT().
-		CreateOrder(context.Background(), mock.MatchedBy(func(order model.Order) bool {
+		CreateOrder(s.ctx, mock.MatchedBy(func(order model.Order) bool {
 			return order.UserUUID == userUUID &&
 				len(order.PartUUIDs) == 2 &&
 				order.TotalPrice == 150 &&
@@ -64,7 +30,7 @@ func (s *OrderCreateServiceSuite) TestCreateOrder_Success() {
 		Return(nil).
 		Once()
 
-	got, err := s.service.CreateOrder(context.Background(), userUUID, partUUIDs)
+	got, err := s.service.CreateOrder(s.ctx, userUUID, partUUIDs)
 
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), userUUID, got.UserUUID)
@@ -73,28 +39,25 @@ func (s *OrderCreateServiceSuite) TestCreateOrder_Success() {
 	assert.NotEmpty(s.T(), got.OrderUUID)
 }
 
-func (s *OrderCreateServiceSuite) TestCreateOrder_InvalidInput() {
-	invMock := &mockInventoryClient{}
-	s.service = serviceorder.NewService(s.repoMock, invMock, &mockPaymentClient{})
-
-	_, err := s.service.CreateOrder(context.Background(), "", []string{"part-1"})
+func (s *OrderServiceSuite) TestCreateOrder_InvalidInput() {
+	_, err := s.service.CreateOrder(s.ctx, "", []string{"part-1"})
 	require.ErrorIs(s.T(), err, model.ErrInvalidOrderInput)
 
-	_, err = s.service.CreateOrder(context.Background(), "user-1", []string{})
+	_, err = s.service.CreateOrder(s.ctx, "user-1", []string{})
 	require.ErrorIs(s.T(), err, model.ErrInvalidOrderInput)
 }
 
-func (s *OrderCreateServiceSuite) TestCreateOrder_InventoryError() {
-	invMock := &mockInventoryClient{
-		err: errors.New("inventory service down"),
-	}
-	s.service = serviceorder.NewService(s.repoMock, invMock, &mockPaymentClient{})
+func (s *OrderServiceSuite) TestCreateOrder_InventoryError() {
+	userUUID := "user-1"
+	partUUIDs := []string{"part-1"}
+	inventoryErr := model.ErrOrderNotFound
 
-	_, err := s.service.CreateOrder(context.Background(), "user-1", []string{"part-1"})
+	s.inventoryMock.EXPECT().
+		ListParts(s.ctx, partUUIDs).
+		Return(nil, inventoryErr).
+		Once()
+
+	_, err := s.service.CreateOrder(s.ctx, userUUID, partUUIDs)
 	require.Error(s.T(), err)
-	assert.Equal(s.T(), "inventory service down", err.Error())
-}
-
-func TestOrderCreateServiceSuite(t *testing.T) {
-	suite.Run(t, new(OrderCreateServiceSuite))
+	require.ErrorIs(s.T(), err, inventoryErr)
 }

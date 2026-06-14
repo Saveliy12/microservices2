@@ -6,28 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"testing"
 
 	"github.com.Saveliy12/microservices2.git/order/internal/model"
-	serviceMocks "github.com.Saveliy12/microservices2.git/order/internal/service/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
-type CreateOrderAPISuite struct {
-	suite.Suite
-	api         *API
-	serviceMock *serviceMocks.OrderService
-}
-
-func (s *CreateOrderAPISuite) SetupTest() {
-	s.serviceMock = serviceMocks.NewOrderService(s.T())
-	s.api = NewAPI(s.serviceMock)
-}
-
-func (s *CreateOrderAPISuite) TestCreateOrder_MethodNotAllowed() {
+func (s *OrderAPISuite) TestCreateOrder_MethodNotAllowed() {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orders", nil)
 	rr := httptest.NewRecorder()
 
@@ -37,7 +23,7 @@ func (s *CreateOrderAPISuite) TestCreateOrder_MethodNotAllowed() {
 	assert.JSONEq(s.T(), `{"error":"method not allowed"}`, rr.Body.String())
 }
 
-func (s *CreateOrderAPISuite) TestCreateOrder_InvalidJSON() {
+func (s *OrderAPISuite) TestCreateOrder_InvalidJSON() {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/orders", strings.NewReader("{"))
 	rr := httptest.NewRecorder()
 
@@ -47,7 +33,7 @@ func (s *CreateOrderAPISuite) TestCreateOrder_InvalidJSON() {
 	assert.JSONEq(s.T(), `{"error":"invalid json"}`, rr.Body.String())
 }
 
-func (s *CreateOrderAPISuite) TestCreateOrder_InvalidInput() {
+func (s *OrderAPISuite) TestCreateOrder_InvalidInput() {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/orders", strings.NewReader(`{"user_uuid":"","part_uuids":[]}`))
 	rr := httptest.NewRecorder()
 
@@ -57,10 +43,14 @@ func (s *CreateOrderAPISuite) TestCreateOrder_InvalidInput() {
 	assert.JSONEq(s.T(), `{"error":"user_uuid and part_uuids are required"}`, rr.Body.String())
 }
 
-func (s *CreateOrderAPISuite) TestCreateOrder_Success() {
+func (s *OrderAPISuite) TestCreateOrder_Success() {
 	userUUID := "user-1"
 	partUUIDs := []string{"p-1", "p-2"}
-	order := model.Order{OrderUUID: "order-1", TotalPrice: 150}
+	order := model.Order{
+		OrderUUID:  "order-1",
+		TotalPrice: 150,
+		Status:     model.StatusPendingPayment,
+	}
 
 	s.serviceMock.EXPECT().CreateOrder(mock.Anything, userUUID, partUUIDs).Return(order, nil).Once()
 
@@ -76,7 +66,7 @@ func (s *CreateOrderAPISuite) TestCreateOrder_Success() {
 	assert.Equal(s.T(), float64(150), got["total_price"])
 }
 
-func (s *CreateOrderAPISuite) TestCreateOrder_ServiceInvalidInput() {
+func (s *OrderAPISuite) TestCreateOrder_ServiceInvalidInput() {
 	userUUID := "user-1"
 	partUUIDs := []string{"p-1"}
 
@@ -91,10 +81,10 @@ func (s *CreateOrderAPISuite) TestCreateOrder_ServiceInvalidInput() {
 	assert.JSONEq(s.T(), `{"error":"invalid order input"}`, rr.Body.String())
 }
 
-func (s *CreateOrderAPISuite) TestCreateOrder_ServiceError() {
+func (s *OrderAPISuite) TestCreateOrder_ServiceError() {
 	userUUID := "user-1"
 	partUUIDs := []string{"p-1"}
-	errBoom := errors.New("inventory unavailable")
+	errBoom := errors.New("unexpected error")
 
 	s.serviceMock.EXPECT().CreateOrder(mock.Anything, userUUID, partUUIDs).Return(model.Order{}, errBoom).Once()
 
@@ -104,9 +94,5 @@ func (s *CreateOrderAPISuite) TestCreateOrder_ServiceError() {
 	s.api.CreateOrder(rr, req)
 
 	require.Equal(s.T(), http.StatusBadGateway, rr.Code)
-	assert.JSONEq(s.T(), `{"error":"inventory unavailable"}`, rr.Body.String())
-}
-
-func TestCreateOrderAPISuite(t *testing.T) {
-	suite.Run(t, new(CreateOrderAPISuite))
+	assert.JSONEq(s.T(), `{"error":"unexpected error"}`, rr.Body.String())
 }

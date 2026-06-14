@@ -1,82 +1,73 @@
 package order_test
 
 import (
-	"context"
-	"testing"
-
 	"github.com.Saveliy12/microservices2.git/order/internal/model"
-	repoMocks "github.com.Saveliy12/microservices2.git/order/internal/repository/mocks"
-	serviceorder "github.com.Saveliy12/microservices2.git/order/internal/service/order"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
-type OrderCancelServiceSuite struct {
-	suite.Suite
-	service  *serviceorder.Service
-	repoMock *repoMocks.OrderRepository
-}
-
-func (s *OrderCancelServiceSuite) SetupTest() {
-	s.repoMock = repoMocks.NewOrderRepository(s.T())
-	s.service = serviceorder.NewService(s.repoMock, nil, nil)
-}
-
-func (s *OrderCancelServiceSuite) TestCancelOrder_Success() {
+func (s *OrderServiceSuite) TestCancelOrder_Success() {
 	orderUUID := "order-1"
-	order := model.Order{OrderUUID: orderUUID, Status: model.StatusPendingPayment, TotalPrice: 100}
+	order := model.Order{
+		OrderUUID:  orderUUID,
+		UserUUID:   "user-1",
+		Status:     model.StatusPendingPayment,
+		TotalPrice: 100,
+	}
 
 	s.repoMock.EXPECT().
-		GetOrder(context.Background(), orderUUID).
+		GetOrder(s.ctx, orderUUID).
 		Return(order, nil).
 		Once()
 
 	s.repoMock.EXPECT().
-		UpdateOrder(context.Background(), model.Order{OrderUUID: orderUUID, Status: model.StatusCancelled, TotalPrice: 100}).
+		UpdateOrder(s.ctx, model.Order{
+			OrderUUID:  orderUUID,
+			UserUUID:   order.UserUUID,
+			TotalPrice: order.TotalPrice,
+			Status:     model.StatusCancelled,
+		}).
 		Return(nil).
 		Once()
 
-	got, err := s.service.CancelOrder(context.Background(), orderUUID)
+	got, err := s.service.CancelOrder(s.ctx, orderUUID)
 
 	require.NoError(s.T(), err)
 	assert.Equal(s.T(), model.StatusCancelled, got.Status)
+	assert.Equal(s.T(), order.UserUUID, got.UserUUID)
+	assert.Equal(s.T(), order.TotalPrice, got.TotalPrice)
 }
 
-func (s *OrderCancelServiceSuite) TestCancelOrder_NotFound() {
+func (s *OrderServiceSuite) TestCancelOrder_NotFound() {
 	s.repoMock.EXPECT().
-		GetOrder(context.Background(), "missing").
+		GetOrder(s.ctx, "missing").
 		Return(model.Order{}, model.ErrOrderNotFound).
 		Once()
 
-	_, err := s.service.CancelOrder(context.Background(), "missing")
+	_, err := s.service.CancelOrder(s.ctx, "missing")
 	require.ErrorIs(s.T(), err, model.ErrOrderNotFound)
 }
 
-func (s *OrderCancelServiceSuite) TestCancelOrder_AlreadyPaid() {
+func (s *OrderServiceSuite) TestCancelOrder_AlreadyPaid() {
 	order := model.Order{OrderUUID: "order-1", Status: model.StatusPaid}
 
 	s.repoMock.EXPECT().
-		GetOrder(context.Background(), "order-1").
+		GetOrder(s.ctx, "order-1").
 		Return(order, nil).
 		Once()
 
-	_, err := s.service.CancelOrder(context.Background(), "order-1")
+	_, err := s.service.CancelOrder(s.ctx, "order-1")
 	require.ErrorIs(s.T(), err, model.ErrOrderAlreadyPaid)
 }
 
-func (s *OrderCancelServiceSuite) TestCancelOrder_AlreadyCancelled() {
+func (s *OrderServiceSuite) TestCancelOrder_AlreadyCancelled() {
 	order := model.Order{OrderUUID: "order-1", Status: model.StatusCancelled}
 
 	s.repoMock.EXPECT().
-		GetOrder(context.Background(), "order-1").
+		GetOrder(s.ctx, "order-1").
 		Return(order, nil).
 		Once()
 
-	_, err := s.service.CancelOrder(context.Background(), "order-1")
+	_, err := s.service.CancelOrder(s.ctx, "order-1")
 	require.ErrorIs(s.T(), err, model.ErrOrderCancelled)
-}
-
-func TestOrderCancelServiceSuite(t *testing.T) {
-	suite.Run(t, new(OrderCancelServiceSuite))
 }

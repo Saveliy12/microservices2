@@ -3,21 +3,21 @@ package v1
 import (
 	"testing"
 
+	serviceMocks "github.com.Saveliy12/microservices2.git/order/internal/service/mocks"
 	"github.com/stretchr/testify/suite"
 )
 
-func TestOrderGetAPIIntegration(t *testing.T) {
-	suite.Run(t, new(GetOrderAPISuite))
+type OrderAPISuite struct {
+	suite.Suite
+	api         *API
+	serviceMock *serviceMocks.OrderService
 }
 
-func TestOrderCreateAPIIntegration(t *testing.T) {
-	suite.Run(t, new(CreateOrderAPISuite))
+func (s *OrderAPISuite) SetupTest() {
+	s.serviceMock = serviceMocks.NewOrderService(s.T())
+	s.api = NewAPI(s.serviceMock)
 }
 
-func TestOrderPayAPIIntegration(t *testing.T) {
-	suite.Run(t, new(PayOrderAPISuite))
-}
-
-func TestOrderCancelAPIIntegration(t *testing.T) {
-	suite.Run(t, new(CancelOrderAPISuite))
+func TestOrderAPISuite(t *testing.T) {
+	suite.Run(t, new(OrderAPISuite))
 }
