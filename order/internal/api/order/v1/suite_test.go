@@ -10,11 +10,11 @@ import (
 type OrderAPISuite struct {
 	suite.Suite
 	api         *API
-	serviceMock *serviceMocks.OrderService
+	serviceMock *serviceMocks.OrderServiceMock
 }
 
 func (s *OrderAPISuite) SetupTest() {
-	s.serviceMock = serviceMocks.NewOrderService(s.T())
+	s.serviceMock = serviceMocks.NewOrderServiceMock(s.T())
 	s.api = NewAPI(s.serviceMock)
 }
 

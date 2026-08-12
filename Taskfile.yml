@@ -25,6 +25,11 @@ vars:
   PROTOC_GEN_GO_GRPC: '{{.BIN_DIR}}/protoc-gen-go-grpc'
   MOCKERY: "{{.BIN_DIR}}/mockery"
   GRPCURL: '{{.BIN_DIR}}/grpcurl'
+  DOCKER_IMAGE: 'microservice-example:latest'
+  DOCKER_COMPOSE_CORE: '{{.ROOT_DIR}}/deploy/compose/core/docker-compose.yml'
+  DOCKER_COMPOSE_ORDER: '{{.ROOT_DIR}}/deploy/compose/order/docker-compose.yml'
+  DOCKER_COMPOSE_INVENTORY: '{{.ROOT_DIR}}/deploy/compose/inventory/docker-compose.yml'
+  DOCKER_COMPOSE_PAYMENT: '{{.ROOT_DIR}}/deploy/compose/payment/docker-compose.yml'
 
   NODE_MODULES_DIR: '{{.ROOT_DIR}}/node_modules/.bin'
   REDOCLY: '{{.NODE_MODULES_DIR}}/redocly'
@@ -88,7 +93,7 @@ tasks:
         for module in {{.MODULES}}; do
           if [ -d "$module" ]; then
             echo "🎯 Сортируем импорты в $module"
-            find $module -type f -name '*.go' ! -path '*/mocks/*' -exec {{.GCI}} write -s standard -s default -s "prefix(github.com/olezhek28/microservices-course-olezhek-solution)" {} +
+            find $module -type f -name '*.go' ! -path '*/mocks/*' -exec {{.GCI}} write -s standard -s default -s "prefix(github.com/Saveliy12/microservices2.git)" {} +
           fi
         done
 
@@ -377,6 +382,63 @@ tasks:
         }
     status:
       - test -x {{.GRPCURL}}
+
+  docker:compose:core:up:
+    desc: "Запускает общую Docker Compose сеть"
+    cmds:
+      - |
+        echo "🚀 Поднимаем core compose..."
+        docker compose -f {{.DOCKER_COMPOSE_CORE}} up -d
+
+  docker:compose:order:up:
+    desc: "Запускает Docker Compose для Order (PostgreSQL + сервис)"
+    cmds:
+      - |
+        echo "🚀 Поднимаем order compose..."
+        docker compose -f {{.DOCKER_COMPOSE_ORDER}} up -d --build
+
+  docker:compose:inventory:up:
+    desc: "Запускает Docker Compose для Inventory (MongoDB + сервис)"
+    cmds:
+      - |
+        echo "🚀 Поднимаем inventory compose..."
+        docker compose -f {{.DOCKER_COMPOSE_INVENTORY}} up -d --build
+
+  docker:compose:payment:up:
+    desc: "Запускает Docker Compose для Payment сервиса"
+    cmds:
+      - |
+        echo "🚀 Поднимаем payment compose..."
+        docker compose -f {{.DOCKER_COMPOSE_PAYMENT}} up -d --build
+
+  docker:compose:up:
+    desc: "Запускает все Docker Compose зависимости и сервисы"
+    cmds:
+      - task: docker:compose:core:up
+      - task: docker:compose:order:up
+      - task: docker:compose:inventory:up
+      - task: docker:compose:payment:up
+      - |
+        echo "✅ Все docker compose зависимости и сервисы запущены"
+
+  docker:compose:build:
+    desc: "Собирает образы сервисов Docker Compose с нуля"
+    cmds:
+      - |
+        echo "🔨 Собираем контейнеры Docker Compose..."
+        docker compose -f {{.DOCKER_COMPOSE_ORDER}} -f {{.DOCKER_COMPOSE_INVENTORY}} -f {{.DOCKER_COMPOSE_PAYMENT}} build --no-cache
+        echo "✅ Сборка успешно завершена"
+
+  docker:compose:down:
+    desc: "Останавливает и удаляет контейнеры Docker Compose"
+    cmds:
+      - |
+        echo "🛑 Останавливаем контейнеры Docker Compose..."
+        docker compose -f {{.DOCKER_COMPOSE_PAYMENT}} down -v || true
+        docker compose -f {{.DOCKER_COMPOSE_INVENTORY}} down -v || true
+        docker compose -f {{.DOCKER_COMPOSE_ORDER}} down -v || true
+        docker compose -f {{.DOCKER_COMPOSE_CORE}} down -v || true
+        echo "✅ Контейнеры остановлены"
 
   test-api:
     desc: "🧪 Запуск тестов для проверки API микросервисов"

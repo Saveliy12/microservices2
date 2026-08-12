@@ -13,12 +13,12 @@ type PartServiceSuite struct {
 	suite.Suite
 	ctx                context.Context
 	service            *servicepart.Service
-	partRepositoryMock *repositoryMocks.PartRepository
+	partRepositoryMock *repositoryMocks.PartRepositoryMock
 }
 
 func (s *PartServiceSuite) SetupTest() {
 	s.ctx = context.Background()
-	s.partRepositoryMock = repositoryMocks.NewPartRepository(s.T())
+	s.partRepositoryMock = repositoryMocks.NewPartRepositoryMock(s.T())
 	s.service = servicepart.NewService(s.partRepositoryMock)
 }
 

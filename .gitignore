@@ -30,3 +30,10 @@ bin/
 bundles/
 node_modules/
 coverage/
+
+# Root-level build artifacts
+/cmd
+
+# Env files (keep .env.example tracked)
+*.env
+!.env.example

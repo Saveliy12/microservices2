@@ -6,76 +6,43 @@ import (
 	"github.com.Saveliy12/microservices2.git/inventory/internal/model"
 	repositoryConverter "github.com.Saveliy12/microservices2.git/inventory/internal/repository/converter"
 	repositoryModel "github.com.Saveliy12/microservices2.git/inventory/internal/repository/model"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-func (r *Repository) ListParts(_ context.Context, filter model.PartsFilter) ([]model.Part, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
+func (r *Repository) ListParts(ctx context.Context, filter model.PartsFilter) ([]model.Part, error) {
 	repoFilter := repositoryConverter.ModelFilterToRepoFilter(filter)
+	query := buildPartsFilter(repoFilter)
 
-	parts := make([]repositoryModel.Part, 0, len(r.parts))
-	for _, part := range r.parts {
-		if !matchesFilter(part, repoFilter) {
-			continue
-		}
-
-		parts = append(parts, part)
+	var parts []repositoryModel.Part
+	if err := r.collection.Find(ctx, query, &parts); err != nil {
+		return nil, err
 	}
 
 	return repositoryConverter.RepoPartsToModel(parts), nil
 }
 
-func matchesFilter(part repositoryModel.Part, filter repositoryModel.PartsFilter) bool {
-	if len(filter.UUIDs) > 0 && !containsString(filter.UUIDs, part.UUID) {
-		return false
+func buildPartsFilter(filter repositoryModel.PartsFilter) bson.M {
+	query := bson.M{}
+
+	if len(filter.UUIDs) > 0 {
+		query["uuid"] = bson.M{"$in": filter.UUIDs}
 	}
 
-	if len(filter.Names) > 0 && !containsString(filter.Names, part.Name) {
-		return false
+	if len(filter.Names) > 0 {
+		query["name"] = bson.M{"$in": filter.Names}
 	}
 
-	if len(filter.Categories) > 0 && !containsCategory(filter.Categories, part.Category) {
-		return false
+	if len(filter.Categories) > 0 {
+		query["category"] = bson.M{"$in": filter.Categories}
 	}
 
-	if len(filter.ManufacturerCountries) > 0 && !containsString(filter.ManufacturerCountries, part.Manufacturer.Country) {
-		return false
+	if len(filter.ManufacturerCountries) > 0 {
+		query["manufacturer.country"] = bson.M{"$in": filter.ManufacturerCountries}
 	}
 
-	if len(filter.Tags) > 0 && !hasAnyTag(filter.Tags, part.Tags) {
-		return false
+	if len(filter.Tags) > 0 {
+		query["tags"] = bson.M{"$in": filter.Tags}
 	}
 
-	return true
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-
-	return false
-}
-
-func containsCategory(values []repositoryModel.Category, target repositoryModel.Category) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-
-	return false
-}
-
-func hasAnyTag(filterTags, partTags []string) bool {
-	for _, tag := range partTags {
-		if containsString(filterTags, tag) {
-			return true
-		}
-	}
-
-	return false
+	return query
 }

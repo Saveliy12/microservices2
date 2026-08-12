@@ -1,21 +1,21 @@
 package order
 
 import (
-	"sync"
-
+	"github.com.Saveliy12/microservices2.git/order/internal/client/db"
 	repository "github.com.Saveliy12/microservices2.git/order/internal/repository"
-	repositoryModel "github.com.Saveliy12/microservices2.git/order/internal/repository/model"
+	"github.com/Masterminds/squirrel"
 )
 
 var _ repository.OrderRepository = (*Repository)(nil)
 
 type Repository struct {
-	mu     sync.RWMutex
-	orders map[string]repositoryModel.Order
+	client  db.Client
+	builder squirrel.StatementBuilderType
 }
 
-func NewRepository() *Repository {
+func NewRepository(client db.Client) *Repository {
 	return &Repository{
-		orders: make(map[string]repositoryModel.Order),
+		client:  client,
+		builder: squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar),
 	}
 }

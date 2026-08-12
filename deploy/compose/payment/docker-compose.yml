@@ -1,0 +1,17 @@
+services: # Сервис Payment - обработка платежей по gRPC
+
+  payment:
+    build:
+      context: ../../.. # Контекст из корня репозитория, чтобы работал replace на shared
+      dockerfile: payment/Dockerfile
+    container_name: payment
+    restart: unless-stopped
+    ports:
+      - "50052:50052" # gRPC Payment наружу для отладки
+    networks:
+      - microservices-net
+
+networks:
+  microservices-net:
+    external: true
+    # Общая сеть создаётся в deploy/compose/core/docker-compose.yml

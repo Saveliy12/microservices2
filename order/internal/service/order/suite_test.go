@@ -14,20 +14,19 @@ type OrderServiceSuite struct {
 	suite.Suite
 	ctx               context.Context
 	service           *serviceorder.Service
-	repoMock          *mocks.OrderRepository
-	inventoryMock     *servicemocks.InventoryClient
-	paymentClientMock *servicemocks.PaymentClient
+	repoMock          *mocks.OrderRepositoryMock
+	inventoryMock     *servicemocks.InventoryClientMock
+	paymentClientMock *servicemocks.PaymentClientMock
 }
 
 func (s *OrderServiceSuite) SetupTest() {
 	s.ctx = context.Background()
-	s.repoMock = mocks.NewOrderRepository(s.T())
-	s.inventoryMock = servicemocks.NewInventoryClient(s.T())
-	s.paymentClientMock = servicemocks.NewPaymentClient(s.T())
+	s.repoMock = mocks.NewOrderRepositoryMock(s.T())
+	s.inventoryMock = servicemocks.NewInventoryClientMock(s.T())
+	s.paymentClientMock = servicemocks.NewPaymentClientMock(s.T())
 	s.service = serviceorder.NewService(s.repoMock, s.inventoryMock, s.paymentClientMock)
 }
 
 func TestOrderServiceSuite(t *testing.T) {
 	suite.Run(t, new(OrderServiceSuite))
 }
-

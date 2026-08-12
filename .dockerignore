@@ -1,0 +1,21 @@
+# Зависимости и артефакты
+bin/
+node_modules/
+coverage/
+vendor/
+
+# VCS и окружение
+.git/
+.idea/
+.vscode/
+*.env
+!.env.example
+
+# Документация и CI
+HOW_TO_DO/
+how_to_do/
+.github/
+
+# Сгенерированные/временные файлы
+tmp/
+*.log

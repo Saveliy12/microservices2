@@ -12,12 +12,12 @@ type InventoryAPISuite struct {
 	suite.Suite
 	ctx           context.Context
 	api           *API
-	inventoryMock *serviceMocks.InventoryService
+	inventoryMock *serviceMocks.InventoryServiceMock
 }
 
 func (s *InventoryAPISuite) SetupTest() {
 	s.ctx = context.Background()
-	s.inventoryMock = serviceMocks.NewInventoryService(s.T())
+	s.inventoryMock = serviceMocks.NewInventoryServiceMock(s.T())
 	s.api = NewAPI(s.inventoryMock)
 }
 

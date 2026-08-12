@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,107 +12,61 @@ import (
 	"time"
 
 	apiv1 "github.com.Saveliy12/microservices2.git/order/internal/api/order/v1"
-	"github.com.Saveliy12/microservices2.git/order/internal/model"
+	"github.com.Saveliy12/microservices2.git/order/internal/client/db"
+	dbpg "github.com.Saveliy12/microservices2.git/order/internal/client/db/pg"
+	inventoryclient "github.com.Saveliy12/microservices2.git/order/internal/clients/inventory"
+	paymentclient "github.com.Saveliy12/microservices2.git/order/internal/clients/payment"
+	"github.com.Saveliy12/microservices2.git/order/internal/migrator"
 	repositoryorder "github.com.Saveliy12/microservices2.git/order/internal/repository/order"
+	service "github.com.Saveliy12/microservices2.git/order/internal/service"
 	serviceorder "github.com.Saveliy12/microservices2.git/order/internal/service/order"
-	inventoryv1 "github.com.Saveliy12/microservices2.git/shared/pkg/proto/inventory/v1"
-	paymentv1 "github.com.Saveliy12/microservices2.git/shared/pkg/proto/payment/v1"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 const (
-	httpPort          = ":8080"
-	inventoryAddr     = "localhost:50051"
-	paymentAddr       = "localhost:50052"
-	readHeaderTimeout = 5 * time.Second
-	shutdownTimeout   = 10 * time.Second
-	swaggerJSONPath   = "shared/api/bundles/order.openapi.v1.bundle.yaml"
-	swaggerStaticDir  = "shared/api"
+	httpPort             = ":8080"
+	readHeaderTimeout    = 5 * time.Second
+	shutdownTimeout      = 10 * time.Second
+	swaggerJSONPath      = "shared/api/bundles/order.openapi.v1.bundle.yaml"
+	swaggerStaticDir     = "shared/api"
+	defaultMigrationsDir = "order/migrations"
+	defaultInventoryAddr = "localhost:50051"
+	defaultPaymentAddr   = "localhost:50052"
 )
 
-// inventoryClientAdapter реализует интерфейс service.InventoryClient для gRPC взаимодействия с микросервисом инвентаря
-type inventoryClientAdapter struct {
-	client inventoryv1.InventoryServiceClient
+// inventoryAddr возвращает адрес Inventory-сервиса из окружения
+// с дефолтом для локального запуска
+func inventoryAddr() string {
+	if addr := os.Getenv("INVENTORY_ADDR"); addr != "" {
+		return addr
+	}
+
+	return defaultInventoryAddr
 }
 
-func (a *inventoryClientAdapter) ListParts(ctx context.Context, partUUIDs []string) ([]model.PartQuote, error) {
-	req := &inventoryv1.ListPartsRequest{
-		Filter: &inventoryv1.PartsFilter{
-			Uuids: make([]*wrapperspb.StringValue, 0, len(partUUIDs)),
-		},
-	}
-	for _, uuid := range partUUIDs {
-		req.Filter.Uuids = append(req.Filter.Uuids, wrapperspb.String(uuid))
+// paymentAddr возвращает адрес Payment-сервиса из окружения
+// с дефолтом для локального запуска
+func paymentAddr() string {
+	if addr := os.Getenv("PAYMENT_ADDR"); addr != "" {
+		return addr
 	}
 
-	resp, err := a.client.ListParts(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	parts := make([]model.PartQuote, 0, len(resp.GetParts()))
-	for _, part := range resp.GetParts() {
-		parts = append(parts, model.PartQuote{
-			UUID:  part.GetUuid(),
-			Price: part.GetPrice(),
-		})
-	}
-
-	return parts, nil
-}
-
-// paymentClientAdapter реализует интерфейс service.PaymentClient для gRPC взаимодействия с микросервисом платежей
-type paymentClientAdapter struct {
-	client paymentv1.PaymentServiceClient
-}
-
-func (a *paymentClientAdapter) PayOrder(ctx context.Context, orderUUID, userUUID string, paymentMethod model.PaymentMethod) (string, error) {
-	pmEnum, err := paymentMethodToProto(paymentMethod)
-	if err != nil {
-		return "", err
-	}
-
-	req := &paymentv1.PayOrderRequest{
-		OrderUuid:     orderUUID,
-		UserUuid:      userUUID,
-		PaymentMethod: pmEnum,
-	}
-
-	resp, err := a.client.PayOrder(ctx, req)
-	if err != nil {
-		return "", err
-	}
-
-	return resp.GetTransactionUuid(), nil
-}
-
-// paymentMethodToProto преобразует доменный enum PaymentMethod в protobuf enum PaymentMethod
-func paymentMethodToProto(method model.PaymentMethod) (paymentv1.PaymentMethod, error) {
-	switch method {
-	case model.PaymentMethodCard:
-		return paymentv1.PaymentMethod_PAYMENT_METHOD_CARD, nil
-	case model.PaymentMethodSbp:
-		return paymentv1.PaymentMethod_PAYMENT_METHOD_SBP, nil
-	case model.PaymentMethodCreditCard:
-		return paymentv1.PaymentMethod_PAYMENT_METHOD_CREDIT_CARD, nil
-	case model.PaymentMethodInvestorMoney:
-		return paymentv1.PaymentMethod_PAYMENT_METHOD_INVESTOR_MONEY, nil
-	default:
-		return paymentv1.PaymentMethod_PAYMENT_METHOD_UNSPECIFIED, errors.New("invalid payment method")
-	}
+	return defaultPaymentAddr
 }
 
 // initializeConnections устанавливает gRPC соединения с микросервисами инвентаря и платежей
 // Если соединение с платежами упадёт, соединение с инвентарём будет закрыто и вернётся ошибка
 func initializeConnections(ctx context.Context) (*grpc.ClientConn, *grpc.ClientConn, error) {
-	invConn, err := connectGRPC(ctx, inventoryAddr)
+	invConn, err := connectGRPC(ctx, inventoryAddr())
 	if err != nil {
 		return nil, nil, err
 	}
 
-	payConn, err := connectGRPC(ctx, paymentAddr)
+	payConn, err := connectGRPC(ctx, paymentAddr())
 	if err != nil {
 		_ = invConn.Close()
 		return nil, nil, err
@@ -120,24 +75,10 @@ func initializeConnections(ctx context.Context) (*grpc.ClientConn, *grpc.ClientC
 	return invConn, payConn, nil
 }
 
-// newInventoryAdapter создаёт адаптер для взаимодействия с микросервисом инвентаря
-func newInventoryAdapter(conn *grpc.ClientConn) *inventoryClientAdapter {
-	return &inventoryClientAdapter{
-		client: inventoryv1.NewInventoryServiceClient(conn),
-	}
-}
-
-// newPaymentAdapter создаёт адаптер для взаимодействия с микросервисом платежей
-func newPaymentAdapter(conn *grpc.ClientConn) *paymentClientAdapter {
-	return &paymentClientAdapter{
-		client: paymentv1.NewPaymentServiceClient(conn),
-	}
-}
-
 // buildServiceStack собирает слои чистой архитектуры: репозиторий -> сервис -> API
-func buildServiceStack(invAdapter *inventoryClientAdapter, payAdapter *paymentClientAdapter) *apiv1.API {
-	repo := repositoryorder.NewRepository()
-	service := serviceorder.NewService(repo, invAdapter, payAdapter)
+func buildServiceStack(dbClient db.Client, invClient service.InventoryClient, payClient service.PaymentClient) *apiv1.API {
+	repo := repositoryorder.NewRepository(dbClient)
+	service := serviceorder.NewService(repo, invClient, payClient)
 	return apiv1.NewAPI(service)
 }
 
@@ -171,19 +112,51 @@ func registerRoutes(mux *http.ServeMux, api *apiv1.API) {
 	})
 }
 
-// deferCloseConn безопасно закрывает gRPC соединение и логирует любые ошибки.
+// deferCloseConn безопасно закрывает gRPC соединение и логирует любые ошибки
 func deferCloseConn(conn *grpc.ClientConn, name string) {
 	if err := conn.Close(); err != nil {
 		log.Printf("failed to close %s connection: %v", name, err)
 	}
 }
 
+// initDB создаёт пул соединений PostgreSQL и применяет миграции
+// Возвращает обёртку над пулом (db.Client) и функцию закрытия
+func initDB(ctx context.Context) (db.Client, func(), error) {
+	dbURI := os.Getenv("DB_URI")
+	if dbURI == "" {
+		return nil, nil, errors.New("DB_URI is not set")
+	}
+
+	pool, err := pgxpool.New(ctx, dbURI)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	migrationsDir := os.Getenv("MIGRATIONS_DIR")
+	if migrationsDir == "" {
+		migrationsDir = defaultMigrationsDir
+	}
+	mig := migrator.NewMigrator(sqlDB, migrationsDir)
+	if err := mig.Up(); err != nil {
+		pool.Close()
+		return nil, nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	return dbpg.NewPGClient(pool), pool.Close, nil
+}
+
 func main() {
-	// Настройка graceful shutdown с обработкой сигналов.
+	// Загружаем переменные окружения из .env (если он есть) перед чтением настроек
+	if err := godotenv.Load(".env"); err != nil {
+		log.Printf("warning: failed to load .env file: %v", err)
+	}
+
+	// Настройка graceful shutdown с обработкой сигналов
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Инициализация соединений с микросервисами.
+	// Инициализация соединений с микросервисами
 	invConn, payConn, err := initializeConnections(ctx)
 	if err != nil {
 		stop()
@@ -192,14 +165,21 @@ func main() {
 	defer deferCloseConn(invConn, "inventory")
 	defer deferCloseConn(payConn, "payment")
 
-	// Построение стека чистой архитектуры с адаптерами.
-	api := buildServiceStack(newInventoryAdapter(invConn), newPaymentAdapter(payConn))
+	// Инициализация пула соединений с базой данных и применение миграций
+	dbClient, closeDB, err := initDB(ctx)
+	if err != nil {
+		stop()
+		log.Fatalf("failed to initialize database: %v", err)
+	}
+	defer closeDB()
 
-	// Регистрация HTTP маршрутов и обработчиков.
+	api := buildServiceStack(dbClient, inventoryclient.New(invConn), paymentclient.New(payConn))
+
+	// Регистрация HTTP маршрутов и обработчиков
 	mux := http.NewServeMux()
 	registerRoutes(mux, api)
 
-	// Конфигурация и запуск HTTP сервера.
+	// Конфигурация и запуск HTTP сервера
 	server := &http.Server{
 		Addr:              httpPort,
 		Handler:           mux,
@@ -213,11 +193,10 @@ func main() {
 		}
 	}()
 
-	// Ожидание сигнала завершения.
+	// Ожидание сигнала завершения
 	<-ctx.Done()
 	log.Println("🛑 Shutting down Order HTTP server...")
 
-	// Graceful shutdown с таймаутом.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
@@ -238,7 +217,7 @@ func connectGRPC(ctx context.Context, address string) (*grpc.ClientConn, error) 
 	return conn, nil
 }
 
-// serveSwaggerJSON отдаёт OpenAPI спецификацию в формате JSON.
+// serveSwaggerJSON отдаёт OpenAPI спецификацию в формате JSON
 func serveSwaggerJSON(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

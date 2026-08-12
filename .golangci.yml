@@ -1,3 +1,5 @@
+version: "2"
+
 run:
   disable-all: true
   timeout: 5m

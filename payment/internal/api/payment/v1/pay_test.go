@@ -18,11 +18,11 @@ import (
 type APITestSuite struct {
 	suite.Suite
 	api                *API
-	paymentServiceMock *mocks.PaymentService
+	paymentServiceMock *mocks.PaymentServiceMock
 }
 
 func (s *APITestSuite) SetupTest() {
-	s.paymentServiceMock = mocks.NewPaymentService(s.T())
+	s.paymentServiceMock = mocks.NewPaymentServiceMock(s.T())
 	s.api = NewAPI(s.paymentServiceMock)
 }
 
