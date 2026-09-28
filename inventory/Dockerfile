@@ -11,6 +11,7 @@ WORKDIR /app
 # а связь с shared обеспечивает replace (inventory/go.mod: replace shared => ../shared)
 COPY inventory/go.mod inventory/go.sum ./inventory/
 COPY shared/go.mod shared/go.sum ./shared/
+COPY platform/go.mod platform/go.sum ./platform/
 
 # Загружаем зависимости заранее
 RUN cd inventory && go mod download
@@ -18,6 +19,7 @@ RUN cd inventory && go mod download
 # Копируем исходный код модуля и shared
 COPY inventory/ ./inventory/
 COPY shared/ ./shared/
+COPY platform/ ./platform/
 
 # ⚠️ ВАЖНО: Собираем статически слинкованный бинарник для Alpine
 RUN cd inventory && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /server ./cmd

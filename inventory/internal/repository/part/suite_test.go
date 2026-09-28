@@ -22,10 +22,6 @@ func (s *PartRepositorySuite) SetupTest() {
 	s.repo = repoinventory.NewRepository(s.collection)
 }
 
-func (s *PartRepositorySuite) TearDownTest() {
-	// Cleanup if needed
-}
-
 func TestPartRepositorySuite(t *testing.T) {
 	suite.Run(t, new(PartRepositorySuite))
 }

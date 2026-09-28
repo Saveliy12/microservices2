@@ -6,9 +6,7 @@ services: # Здесь описываются контейнеры, необхо
       dockerfile: inventory/Dockerfile
     container_name: inventory
     restart: unless-stopped
-    environment:
-      MONGO_URI: mongodb://demo:demo@mongo-inventory:27017/example?authSource=admin
-      MONGO_DB: example
+    env_file: .env # Генерируется task env:generate из deploy/env/inventory.env.template
     ports:
       - "50051:50051" # gRPC Inventory наружу для отладки
     depends_on:

@@ -6,6 +6,7 @@ services: # Сервис Payment - обработка платежей по gRPC
       dockerfile: payment/Dockerfile
     container_name: payment
     restart: unless-stopped
+    env_file: .env # Генерируется task env:generate из deploy/env/payment.env.template
     ports:
       - "50052:50052" # gRPC Payment наружу для отладки
     networks:

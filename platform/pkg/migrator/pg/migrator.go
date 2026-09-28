@@ -1,18 +1,23 @@
-package migrator
+package pg
 
 import (
 	"database/sql"
 	"fmt"
 
 	"github.com/pressly/goose/v3"
+
+	"github.com.Saveliy12/microservices2.git/platform/pkg/migrator"
 )
 
+var _ migrator.Migrator = (*Migrator)(nil)
+
+// Migrator применяет миграции PostgreSQL через goose
 type Migrator struct {
 	db            *sql.DB
 	migrationsDir string
 }
 
-func NewMigrator(db *sql.DB, migrationsDir string) *Migrator {
+func New(db *sql.DB, migrationsDir string) *Migrator {
 	return &Migrator{
 		db:            db,
 		migrationsDir: migrationsDir,
@@ -20,13 +25,11 @@ func NewMigrator(db *sql.DB, migrationsDir string) *Migrator {
 }
 
 func (m *Migrator) Up() error {
-	err := goose.SetDialect("postgres")
-	if err != nil {
+	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("failed to set dialect: %w", err)
 	}
 
-	err = goose.Up(m.db, m.migrationsDir)
-	if err != nil {
+	if err := goose.Up(m.db, m.migrationsDir); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 

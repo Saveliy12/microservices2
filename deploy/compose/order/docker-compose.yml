@@ -6,11 +6,7 @@ services: # Раздел, описывающий контейнеры, кото�
       dockerfile: order/Dockerfile
     container_name: order
     restart: unless-stopped
-    environment:
-      DB_URI: postgres://demo:demo@postgres-order:5432/postgres?sslmode=disable
-      MIGRATIONS_DIR: /app/migrations
-      INVENTORY_ADDR: inventory:50051 # Внутри сети обращаемся к Inventory по имени сервиса
-      PAYMENT_ADDR: payment:50052 # Внутри сети обращаемся к Payment по имени сервиса
+    env_file: .env # Генерируется task env:generate из deploy/env/order.env.template
     ports:
       - "8080:8080" # HTTP Order наружу для отладки
     depends_on:
@@ -38,9 +34,9 @@ services: # Раздел, описывающий контейнеры, кото�
       # Он сохраняет данные между перезапусками контейнера
 
     ports:
-      - "5432:5432"
-      # Пробрасываем внутренний порт PostgreSQL (5432) на порт хоста
-      # Это нужно, чтобы другие сервисы или инструменты могли подключиться к базе
+      - "5433:5432"
+      # Наружу публикуем на 5433: порт 5432 на хосте может занимать локальный PostgreSQL.
+      # Внутри docker-сети order ходит на postgres-order:5432, публикация нужна только для отладки
 
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U demo -d postgres" ]

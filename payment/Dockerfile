@@ -11,6 +11,7 @@ WORKDIR /app
 # а связь с shared обеспечивает replace (payment/go.mod: replace shared => ../shared)
 COPY payment/go.mod payment/go.sum ./payment/
 COPY shared/go.mod shared/go.sum ./shared/
+COPY platform/go.mod platform/go.sum ./platform/
 
 # Загружаем зависимости заранее
 RUN cd payment && go mod download
@@ -18,6 +19,7 @@ RUN cd payment && go mod download
 # Копируем исходный код модуля и shared
 COPY payment/ ./payment/
 COPY shared/ ./shared/
+COPY platform/ ./platform/
 
 # ⚠️ ВАЖНО: Собираем статически слинкованный бинарник для Alpine.
 # go mod tidy нужен, т.к. часть go.sum записей живёт в go.work.sum (воркспейс),

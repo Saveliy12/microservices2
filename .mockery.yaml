@@ -1,6 +1,6 @@
 mockname: "{{.InterfaceName}}Mock"
 with-expecter: true
-boilerplate-file: "mockery_boilerplate_text.txt"
+boilerplate-file: ".mockery_boilerplate_text.txt"
 dir: "{{.InterfaceDir}}/mocks"
 filename: "mock_{{.InterfaceNameSnake}}.go"
 outpkg: "mocks"
@@ -17,6 +17,9 @@ packages:
   github.com.Saveliy12/microservices2.git/payment/internal/service:
     config:
       include-regex: ".*Service"
+  github.com.Saveliy12/microservices2.git/payment/internal/config:
+    config:
+      include-regex: ".*"
   github.com.Saveliy12/microservices2.git/payment/internal/repository:
     config:
       include-regex: ".*Repository"
@@ -32,3 +35,9 @@ packages:
   github.com.Saveliy12/microservices2.git/inventory/internal/client/db:
     interfaces:
       Collection:
+  github.com.Saveliy12/microservices2.git/inventory/internal/config:
+    config:
+      include-regex: ".*"
+  github.com.Saveliy12/microservices2.git/order/internal/config:
+    config:
+      include-regex: ".*"

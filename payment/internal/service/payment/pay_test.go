@@ -16,7 +16,6 @@ type PayOrderServiceTestSuite struct {
 }
 
 func (s *PayOrderServiceTestSuite) SetupTest() {
-	// Инициализируем сервис перед каждым тестом
 	s.service = paymentservice.NewService()
 }
 

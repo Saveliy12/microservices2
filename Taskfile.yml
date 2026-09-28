@@ -13,6 +13,7 @@ vars:
   YQ_VERSION: 'v4.45.2'
   MOCKERY_VERSION: 'v2.53.3'
   GRPCURL_VERSION: 'v1.9.3'
+  ENVSUBST_VERSION: 'v1.4.3'
 
   BIN_DIR: '{{.ROOT_DIR}}/bin'
   GOLANGCI_LINT: '{{.BIN_DIR}}/golangci-lint'
@@ -25,6 +26,9 @@ vars:
   PROTOC_GEN_GO_GRPC: '{{.BIN_DIR}}/protoc-gen-go-grpc'
   MOCKERY: "{{.BIN_DIR}}/mockery"
   GRPCURL: '{{.BIN_DIR}}/grpcurl'
+  ENVSUBST: '{{.BIN_DIR}}/envsubst'
+  ENVDIR: '{{.ROOT_DIR}}/deploy/env'
+  SERVICES: 'payment,inventory,order'
   DOCKER_IMAGE: 'microservice-example:latest'
   DOCKER_COMPOSE_CORE: '{{.ROOT_DIR}}/deploy/compose/core/docker-compose.yml'
   DOCKER_COMPOSE_ORDER: '{{.ROOT_DIR}}/deploy/compose/order/docker-compose.yml'
@@ -279,6 +283,69 @@ tasks:
         echo '🧪 Генерация моков...'
         {{.MOCKERY}}
 
+  env:install-envsubst:
+    desc: "Устанавливает envsubst в bin/"
+    cmds:
+      - |
+        [ -f {{.ENVSUBST}} ] || {
+          echo "📦 Устанавливаем envsubst версии {{.ENVSUBST_VERSION}}..."
+          GOBIN={{.BIN_DIR}} go install github.com/a8m/envsubst/cmd/envsubst@{{.ENVSUBST_VERSION}}
+        }
+        echo "✅ envsubst установлен: {{.ENVSUBST}}"
+    status:
+      - test -x {{.ENVSUBST}}
+
+  env:generate:
+    desc: "Генерирует .env файлы для всех сервисов из шаблонов и единого файла конфигурации"
+    deps: [ env:install-envsubst ]
+    cmds:
+      - |
+        ENV_FILE="{{.ENVDIR}}/.env"
+        TEMPLATE_FILE="{{.ENVDIR}}/.env.template"
+        SCRIPT="{{.ENVDIR}}/generate-env.sh"
+
+        if [ ! -f "$ENV_FILE" ]; then
+          if [ -f "$TEMPLATE_FILE" ]; then
+            echo "🔄 Файл $ENV_FILE не найден, создаем из шаблона $TEMPLATE_FILE"
+            cp "$TEMPLATE_FILE" "$ENV_FILE"
+            echo "✅ Создан файл $ENV_FILE. Проверьте и отредактируйте значения переменных при необходимости."
+          else
+            echo "❌ Шаблон $TEMPLATE_FILE не найден!"
+            exit 1
+          fi
+        fi
+
+        chmod +x "$SCRIPT"
+        # Передаем список сервисов в виде строки с разделителями-запятыми
+        export SERVICES="{{.SERVICES}}"
+        ENV_SUBST={{.ENVSUBST}} "$SCRIPT"
+
+  test-integration:
+    desc: "Запускает интеграционные тесты для указанных модулей"
+    summary: |
+      Запускает интеграционные тесты для модулей, указанных через переменную MODULES.
+      Использует тег "integration" для идентификации интеграционных тестов.
+    cmds:
+      - |
+        ERR=0
+        echo "🚀 Запуск интеграционных тестов (по тегу integration) для модулей: {{.MODULES}}"
+        for mod in {{.MODULES}}; do
+          if [ -d "$mod" ]; then
+            echo "🧪 Проверка модуля $mod на наличие интеграционных тестов"
+
+            # Проверяем наличие файлов с тегом integration
+            HAS_TESTS=$(grep -r "//go:build integration" $mod --include="*.go" | wc -l)
+
+            if [ "$HAS_TESTS" -eq 0 ]; then
+              echo "⚠️ Модуль $mod не содержит интеграционных тестов (с тегом integration), пропускаем"
+            else
+              echo "▶️ Запуск интеграционных тестов для $mod"
+              go test -v -tags=integration ./$mod/... || ERR=1
+            fi
+          fi
+        done
+        exit $ERR
+
   test-coverage:
     desc: "Тесты с покрытием бизнес-логики (service/repository), отчёт по каждому модулю + общий"
     
@@ -415,9 +482,9 @@ tasks:
     desc: "Запускает все Docker Compose зависимости и сервисы"
     cmds:
       - task: docker:compose:core:up
-      - task: docker:compose:order:up
       - task: docker:compose:inventory:up
       - task: docker:compose:payment:up
+      - task: docker:compose:order:up
       - |
         echo "✅ Все docker compose зависимости и сервисы запущены"
 
