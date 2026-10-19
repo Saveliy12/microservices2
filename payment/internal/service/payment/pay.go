@@ -2,15 +2,16 @@ package payment
 
 import (
 	"context"
-	"log"
 
 	"github.com.Saveliy12/microservices2.git/payment/internal/model"
+	"github.com.Saveliy12/microservices2.git/platform/pkg/logger"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
-func (*Service) PayOrder(_ context.Context, payment model.Payment) (string, error) {
+func (*Service) PayOrder(ctx context.Context, _ model.Payment) (string, error) {
 	transactionUUID := uuid.NewString()
-	log.Printf("Оплата прошла успешно, transaction_uuid: %s", transactionUUID)
+	logger.Info(ctx, "Оплата успешно проведена", zap.String("transaction_uuid", transactionUUID))
 
 	return transactionUUID, nil
 }

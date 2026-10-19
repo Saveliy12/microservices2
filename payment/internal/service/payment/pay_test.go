@@ -7,6 +7,7 @@ import (
 
 	"github.com.Saveliy12/microservices2.git/payment/internal/model"
 	paymentservice "github.com.Saveliy12/microservices2.git/payment/internal/service/payment"
+	"github.com.Saveliy12/microservices2.git/platform/pkg/logger"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -16,6 +17,7 @@ type PayOrderServiceTestSuite struct {
 }
 
 func (s *PayOrderServiceTestSuite) SetupTest() {
+	logger.SetNopLogger()
 	s.service = paymentservice.NewService()
 }
 

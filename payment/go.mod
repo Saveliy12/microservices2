@@ -10,13 +10,11 @@ require (
 	github.com.Saveliy12/microservices2.git/shared v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
+	go.uber.org/zap v1.28.0
 	google.golang.org/grpc v1.83.1
 )
 
-require (
-	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.28.0 // indirect
-)
+require go.uber.org/multierr v1.11.0 // indirect
 
 require (
 	github.com.Saveliy12/microservices2.git/platform v0.0.0
