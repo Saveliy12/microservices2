@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# Compiled service binaries (produced by `go build ./cmd`)
+**/main
+
 # Test binary, built with `go test -c`
 *.test
 

@@ -3,7 +3,7 @@
 This project follows a strict Clean Architecture pattern using Go modules (`go.work`). It relies heavily on `task` (Taskfile) for building, testing, and formatting.
 
 ## Related Documentation
-* [Homework Instructions (`HOW_TO_DO/hw.md`)](HOW_TO_DO/hw.md) - For context on the project's goal.
+* [README (`README.md`)](README.md) - Project overview, stack, architecture and quick start.
 * [Taskfile (`Taskfile.yml`)](Taskfile.yml) - Definitions for all build, test, and generation commands.
 
 ## Architecture Guidelines
@@ -17,7 +17,7 @@ Exposes gRPC or REST. Handlers map requests to the service layer.
 Business logic layer. Implementations live in sub-packages (e.g., `service/part/`, `service/payment/`).
 
 ### 3. Repository Layer (`internal/repository/[domain]/`)
-Data access. **Not all repositories are in-memory** — inventory uses MongoDB, order uses Postgres, only payment uses in-memory with `sync.RWMutex`.
+Data access. **Not all services are backed by a database yet** — inventory uses MongoDB, order uses Postgres, payment has no repository at all: it returns a generated `transaction_uuid`. Do not describe a layer for a service that does not have it.
 
 ### 4. Model Layer (`internal/model/`)
 Business domain types and predefined errors in `error.go`. Map validation to `codes.InvalidArgument` (gRPC) or `400 Bad Request` (HTTP).
@@ -79,7 +79,7 @@ Run all tasks using the `task` CLI tool. It pulls localized binaries to `bin/` a
 | `task format` | Formatting: `gofumpt` + `gci` |
 | `task lint` | Linting: `golangci-lint` |
 | `task mockery:gen` | Update mockery stubs for all modules |
-| `task test-coverage` | Unit tests + 40% coverage check |
+| `task test-coverage` | Unit tests with a coverage report (only `service/` and `repository/` packages) |
 | `task test-api` | E2E smoke tests via `grpcurl` and `curl` |
 | `task test-integration` | Integration tests with Testcontainers (build tag `integration`) |
 | `task env:generate` | Generate `.env` files from `deploy/env/*.env.template` |
@@ -123,7 +123,7 @@ Run all tasks using the `task` CLI tool. It pulls localized binaries to `bin/` a
 
 ### Docker Compose (`deploy/compose/`)
 * Each service has its own `docker-compose.yml` with `env_file: .env`
-* Use `task up-inventory`, `task down-inventory` etc. for container management
+* Use `task docker:compose:inventory:up`, `task docker:compose:payment:up`, `task docker:compose:order:up` and `task docker:compose:down` for container management (there are no `up-inventory` / `down-inventory` aliases).
 
 ### Workflow
 1. Edit `deploy/env/.env.template` or `[service].env.template`
