@@ -3,7 +3,7 @@ version: '3'
 # Глобальные переменные проекта
 vars:
   GO_VERSION: '1.25.8'
-  GOLANGCI_LINT_VERSION: 'v2.1.5'
+  GOLANGCI_LINT_VERSION: 'v2.13.2'
   GCI_VERSION: 'v0.13.6'
   GOFUMPT_VERSION: 'v0.8.0'
   BUF_VERSION: '1.53.0'
@@ -85,7 +85,7 @@ tasks:
       - |
         echo "🧼 Форматируем через gofumpt ..."
         
-        for module in {{.MODULES}}; do
+        for module in {{.MODULES}} platform; do
           if [ -d "$module" ]; then
             echo "🧼 Форматируем $module"
             find $module -type f -name '*.go' ! -path '*/mocks/*' -exec {{.GOFUMPT}} -extra -w {} +
@@ -94,7 +94,7 @@ tasks:
       - |
         echo "🎯 Сортируем импорты через gci ..."
         
-        for module in {{.MODULES}}; do
+        for module in {{.MODULES}} platform; do
           if [ -d "$module" ]; then
             echo "🎯 Сортируем импорты в $module"
             find $module -type f -name '*.go' ! -path '*/mocks/*' -exec {{.GCI}} write -s standard -s default -s "prefix(github.com/Saveliy12/microservices2.git)" {} +
@@ -131,7 +131,7 @@ tasks:
         - format: форматирует код перед проверкой
     deps: [ install-golangci-lint ]
     vars:
-      MODULES: '{{.MODULES}}'
+      MODULES: '{{.MODULES}} platform'
       GOLANGCI_LINT: '{{.GOLANGCI_LINT}}'
     cmds:
       - |

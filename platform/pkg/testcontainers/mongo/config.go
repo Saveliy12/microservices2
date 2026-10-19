@@ -3,10 +3,9 @@ package mongo
 import (
 	"context"
 
+	"github.com.Saveliy12/microservices2.git/platform/pkg/logger"
 	"github.com/moby/moby/api/types/container"
 	"go.uber.org/zap"
-
-	"github.com.Saveliy12/microservices2.git/platform/pkg/logger"
 )
 
 // Logger — минимальный интерфейс логгера

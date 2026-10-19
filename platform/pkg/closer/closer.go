@@ -9,9 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com.Saveliy12/microservices2.git/platform/pkg/logger"
+	"go.uber.org/zap"
 )
 
 // shutdownTimeout по умолчанию, можно сделать параметром

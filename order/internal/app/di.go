@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -116,8 +117,25 @@ func (sp *serviceProvider) DBClient(ctx context.Context) (db.Client, error) {
 	return sp.dbClient, nil
 }
 
+// connectGRPC устанавливает соединение с соседним сервисом.
+// grpc.NewClient создаёт ленивое соединение, поэтому мы явно дожидаемся состояния Ready:
+// если соседний сервис недоступен, приложение падает на старте, а не на первом запросе пользователя.
 func connectGRPC(ctx context.Context, address string) (*grpc.ClientConn, error) {
-	return grpc.DialContext(ctx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, fmt.Errorf("create grpc client for %s: %w", address, err)
+	}
+
+	conn.Connect()
+	for state := conn.GetState(); state != connectivity.Ready; state = conn.GetState() {
+		if !conn.WaitForStateChange(ctx, state) {
+			_ = conn.Close()
+
+			return nil, fmt.Errorf("connect to %s: %w", address, ctx.Err())
+		}
+	}
+
+	return conn, nil
 }
 
 func (sp *serviceProvider) InventoryConn(ctx context.Context) (*grpc.ClientConn, error) {

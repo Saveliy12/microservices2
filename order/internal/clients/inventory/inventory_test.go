@@ -36,7 +36,7 @@ func (s *InventoryClientSuite) SetupTest() {
 		_ = grpcServer.Serve(lis)
 	}()
 
-	conn, err := grpc.DialContext(s.ctx, "bufnet",
+	conn, err := grpc.NewClient("passthrough:///bufnet",
 		grpc.WithContextDialer(func(ctx context.Context, address string) (net.Conn, error) {
 			return lis.DialContext(ctx)
 		}),

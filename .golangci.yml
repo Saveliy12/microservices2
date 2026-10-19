@@ -1,17 +1,30 @@
 version: "2"
 
 run:
-  disable-all: true
+  # Версия языка совпадает с go.work и CI (Taskfile: GO_VERSION)
+  go: "1.25"
   timeout: 5m
+  build-tags:
+    - integration
 
 linters:
-  enable:
-    - govet
+  default: standard
+  exclusions:
+    paths:
+      - vendor
+      - bin
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
 
-skip-dirs:
-  - vendor
-  - bin
+formatters:
+  enable:
+    - gofumpt
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/Saveliy12/microservices2.git)

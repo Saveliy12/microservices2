@@ -4,9 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/pressly/goose/v3"
-
 	"github.com.Saveliy12/microservices2.git/platform/pkg/migrator"
+	"github.com/pressly/goose/v3"
 )
 
 var _ migrator.Migrator = (*Migrator)(nil)

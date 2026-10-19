@@ -8,12 +8,11 @@ import (
 	"net"
 	"time"
 
+	"github.com.Saveliy12/microservices2.git/platform/pkg/logger"
 	"github.com/moby/moby/api/types/container"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/zap"
-
-	"github.com.Saveliy12/microservices2.git/platform/pkg/logger"
 )
 
 const (
